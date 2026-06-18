@@ -1,0 +1,73 @@
+# Configuration for RAG comparison
+device:
+  use_cuda: true
+  cuda_visible_devices: "0"
+  mixed_precision: true
+  compile_models: false
+
+models:
+  embedder:
+    name: "BAAI/bge-small-en-v1.5"
+    max_length: 512
+    batch_size: 32
+    normalize_embeddings: true
+    query_instruction: "Represent this sentence for searching relevant passages: "
+  
+  reranker:
+    name: ""  # Disabled for comparison speed
+    max_length: 512
+    batch_size: 16
+    use_fp16: true
+  
+  nli:
+    name: "cross-encoder/nli-deberta-v3-xsmall"
+    max_length: 512
+    batch_size: 16
+    labels: ["contradiction", "neutral", "entailment"]
+  
+  generator:
+    name: ""
+    max_length: 2048
+    temperature: 0.3
+    top_p: 0.9
+    load_in_8bit: true
+    load_in_4bit: false
+  
+  query_generator:
+    name: ""
+    max_length: 512
+    temperature: 0.7
+    num_variants: 5
+
+retrieval:
+  top_k: 10
+  top_k_final: 5
+  vector_store: "qdrant"
+  collection_name: "evidence_rag"
+  host: "localhost"
+  port: 6333
+  hybrid_search: true
+  alpha_dense: 0.7
+  alpha_sparse: 0.3
+
+independence:
+  enabled: true
+  similarity_threshold: 0.92
+  nli_threshold: 0.85
+  min_independence_score: 0.5
+  clustering_method: "agglomerative"
+  redundancy_penalty: 0.8
+
+utility:
+  enabled: true
+  novelty_weight: 0.4
+  confidence_gain_weight: 0.4
+  contradiction_weight: 0.2
+  min_utility_threshold: 0.3
+  novelty_distance_metric: "cosine"
+  
+search_policy:
+  enabled: false
+
+stability:
+  enabled: false

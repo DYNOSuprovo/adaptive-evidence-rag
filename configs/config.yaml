@@ -1,0 +1,179 @@
+# ============================================
+# Adaptive Evidence-Aware RAG System Config
+# ============================================
+
+# Device Configuration
+device:
+  use_cuda: true
+  cuda_visible_devices: "0"
+  mixed_precision: true
+  compile_models: false
+
+# Model Paths (HuggingFace)
+models:
+  embedder:
+    name: "BAAI/bge-small-en-v1.5"
+    max_length: 512
+    batch_size: 32
+    normalize_embeddings: true
+    query_instruction: "Represent this sentence for searching relevant passages: "
+  
+  reranker:
+    name: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    max_length: 512
+    batch_size: 16
+    use_fp16: true
+  
+  nli:
+    name: "cross-encoder/nli-deberta-v3-xsmall"
+    max_length: 512
+    batch_size: 16
+    labels: ["contradiction", "neutral", "entailment"]
+  
+  generator:
+    name: "Qwen/Qwen3-32B"
+    max_length: 2048
+    temperature: 0.3
+    top_p: 0.9
+    load_in_8bit: true
+    load_in_4bit: false
+  
+  query_generator:
+    name: "Qwen/Qwen3-32B"
+    max_length: 512
+    temperature: 0.7
+    num_variants: 5
+
+# Retrieval Configuration
+retrieval:
+  top_k: 10
+  top_k_final: 5
+  vector_store: "qdrant"  # qdrant, chroma, weaviate
+  collection_name: "evidence_rag"
+  host: "localhost"
+  port: 6333
+  hybrid_search: true
+  alpha_dense: 0.7
+  alpha_sparse: 0.3
+
+# Module 1: Evidence Independence
+independence:
+  enabled: true
+  similarity_threshold: 0.92
+  nli_threshold: 0.85
+  min_independence_score: 0.5
+  clustering_method: "hdbscan"  # hdbscan, agglomerative
+  redundancy_penalty: 0.8
+
+# Module 2: Retrieval Utility
+utility:
+  enabled: true
+  novelty_weight: 0.4
+  confidence_gain_weight: 0.4
+  contradiction_weight: 0.2
+  min_utility_threshold: 0.3
+  novelty_distance_metric: "cosine"
+  
+# Module 3: Search Policy
+search_policy:
+  enabled: true
+  learning_algorithm: "dpo"  # dpo, ppo, reward_model
+  num_query_variants: 5
+  reward_weights:
+    answer_correctness: 0.5
+    evidence_quality: 0.3
+    retrieval_efficiency: 0.2
+  training:
+    lr: 1e-5
+    batch_size: 4
+    epochs: 3
+    gradient_accumulation: 4
+
+# Module 4: Behavioral Stability
+stability:
+  enabled: true
+  num_paraphrases: 10
+  answer_similarity_weight: 0.4
+  evidence_overlap_weight: 0.3
+  confidence_consistency_weight: 0.3
+  min_stability_score: 0.7
+  paraphrase_temperature: 0.8
+
+# Training Configuration
+training:
+  output_dir: "./models"
+  logging_dir: "./logs"
+  save_steps: 500
+  eval_steps: 250
+  logging_steps: 50
+  warmup_ratio: 0.1
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  seed: 42
+
+# Datasets
+datasets:
+  fever:
+    path: "fever"
+    name: "v1.0"
+    split: "train"
+    max_samples: 100000
+  
+  hotpotqa:
+    path: "hotpot_qa"
+    name: "distractor"
+    split: "train"
+    max_samples: 50000
+  
+  natural_questions:
+    path: "google-research-datasets/natural_questions"
+    split: "train"
+    max_samples: 50000
+  
+  triviaqa:
+    path: "trivia_qa"
+    name: "unfiltered.nocontext"
+    split: "train"
+    max_samples: 50000
+  
+  musique:
+    path: "musique"
+    name: "full"
+    split: "train"
+    max_samples: 25000
+
+# Evaluation
+evaluation:
+  metrics:
+    - "exact_match"
+    - "f1"
+    - "retrieval_precision"
+    - "retrieval_recall"
+    - "faithfulness"
+    - "answer_relevance"
+    - "context_relevance"
+  
+  independence_metrics:
+    - "independence_score"
+    - "reduction_ratio"
+    - "cluster_purity"
+  
+  utility_metrics:
+    - "avg_novelty"
+    - "avg_confidence_gain"
+    - "contradiction_detection_rate"
+    - "utility_score"
+  
+  stability_metrics:
+    - "answer_consistency"
+    - "evidence_overlap"
+    - "confidence_variance"
+    - "stability_score"
+
+# Logging & Monitoring
+logging:
+  level: "INFO"
+  use_wandb: false
+  wandb_project: "adaptive-evidence-rag"
+  wandb_entity: "your-username"
+  use_tensorboard: true

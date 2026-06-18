@@ -1,0 +1,80 @@
+# Core ML/DL
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+
+# Transformers & Models
+transformers>=4.36.0
+sentence-transformers>=2.2.2
+accelerate>=0.25.0
+peft>=0.7.0
+bitsandbytes>=0.41.0
+
+# Datasets
+datasets>=2.14.0
+huggingface-hub>=0.19.0
+
+# Vector DB
+qdrant-client>=1.6.0
+chromadb>=0.4.18
+weaviate-client>=3.25.0
+
+# NLI & Classification
+scikit-learn>=1.3.0
+scipy>=1.11.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+tqdm>=4.66.0
+nltk>=3.8.0
+spacy>=3.7.0
+
+# RL & Optimization
+rl4lms>=0.2.0
+trl>=0.7.0
+xformers>=0.0.22
+
+# LLM Serving
+vllm>=0.2.0
+openai>=1.6.0
+
+# Metrics
+evaluate>=0.4.0
+rouge-score>=0.1.2
+bert-score>=0.3.13
+sacrebleu>=2.3.0
+
+# Jupyter
+jupyter>=1.0.0
+ipywidgets>=8.1.0
+notebook>=7.0.0
+
+# Visualization
+matplotlib>=3.8.0
+seaborn>=0.13.0
+plotly>=5.18.0
+
+# Utils
+pyyaml>=6.0.1
+python-dotenv>=1.0.0
+wandb>=0.16.0
+tensorboard>=2.15.0
+
+# API & Backend
+fastapi>=0.105.0
+uvicorn>=0.24.0
+requests>=2.31.0
+
+# LangChain & Agents
+langchain>=0.0.350
+langchain-community>=0.0.1
+langchain-core>=0.1.0
+langgraph>=0.0.40
+
+# Async
+aiohttp>=3.9.0
+asyncio>=3.4.3
+
+# Optional: Flash Attention (for faster training)
+# flash-attn>=2.3.0  # Requires special install
