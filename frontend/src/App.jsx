@@ -18,7 +18,7 @@ function App() {
     setError(null);
     try {
       // Connect to FastAPI backend
-      const response = await axios.post('http://localhost:8000/api/query', {
+      const response = await axios.post('/api/query', {
         question: query,
         num_documents: 5
       });

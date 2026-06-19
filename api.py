@@ -2,6 +2,7 @@ import os
 import sys
 import torch
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
@@ -96,6 +97,10 @@ async def query_pipeline(request: QueryRequest):
             "num_filtered": int(result.get('metadata', {}).get('num_filtered', 0))
         }
     )
+
+# Serve the static React frontend from the root URL
+# This MUST be placed after all API routes so it doesn't intercept /api/...
+app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn
