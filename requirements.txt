@@ -30,10 +30,10 @@ tqdm>=4.66.0
 nltk>=3.8.0
 spacy>=3.7.0
 
-# RL & Optimization
-rl4lms>=0.2.0
-trl>=0.7.0
-xformers>=0.0.22
+# RL & Optimization (Commented out for HF Spaces Deployment)
+# rl4lms>=0.2.0
+# trl>=0.7.0
+# xformers>=0.0.22
 
 # LLM Serving
 vllm>=0.2.0
@@ -45,21 +45,21 @@ rouge-score>=0.1.2
 bert-score>=0.3.13
 sacrebleu>=2.3.0
 
-# Jupyter
-jupyter>=1.0.0
-ipywidgets>=8.1.0
-notebook>=7.0.0
+# Jupyter (Commented out for HF Spaces Deployment)
+# jupyter>=1.0.0
+# ipywidgets>=8.1.0
+# notebook>=7.0.0
 
-# Visualization
-matplotlib>=3.8.0
-seaborn>=0.13.0
-plotly>=5.18.0
+# Visualization (Commented out for HF Spaces Deployment)
+# matplotlib>=3.8.0
+# seaborn>=0.13.0
+# plotly>=5.18.0
 
 # Utils
 pyyaml>=6.0.1
 python-dotenv>=1.0.0
-wandb>=0.16.0
-tensorboard>=2.15.0
+# wandb>=0.16.0
+# tensorboard>=2.15.0
 
 # API & Backend
 fastapi>=0.105.0
