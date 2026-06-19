@@ -48,8 +48,10 @@ def evaluate_on_fever(
     print("\nEvaluating on FEVER...")
     
     try:
-        # Original fever dataset script is broken; load from parquet directly
-        ds = load_dataset('parquet', data_files='hf://datasets/fever/fever/fever/parquet-train.parquet', split='train')
+        try:
+            ds = load_dataset('parquet', data_files='hf://datasets/fever@~parquet/v1.0/train/0000.parquet', split='train')
+        except:
+            ds = load_dataset('fever', 'v1.0', split='train')
     except Exception as e:
         print(f"Could not load FEVER, skipping: {e}")
         return {}
@@ -108,7 +110,10 @@ def evaluate_on_hotpotqa(
     print("\nEvaluating on HotpotQA...")
     
     try:
-        ds = load_dataset('hotpot_qa', 'distractor', split='validation', trust_remote_code=True)
+        try:
+            ds = load_dataset('parquet', data_files='hf://datasets/hotpot_qa/distractor/validation-00000-of-00001.parquet', split='validation')
+        except:
+            ds = load_dataset('hotpot_qa', 'distractor', split='validation', trust_remote_code=True)
     except:
         print("Could not load HotpotQA, skipping")
         return {}
@@ -166,7 +171,10 @@ def evaluate_stability(
     
     # Use trivia questions for stability testing
     try:
-        ds = load_dataset('trivia_qa', 'unfiltered.nocontext', split='validation', trust_remote_code=True)
+        try:
+            ds = load_dataset('parquet', data_files='hf://datasets/mandarjoshi/trivia_qa/unfiltered-nocontext/validation-*.parquet', split='validation')
+        except:
+            ds = load_dataset('trivia_qa', 'unfiltered.nocontext', split='validation', trust_remote_code=True)
     except:
         print("Could not load TriviaQA for stability, using synthetic")
         return evaluate_stability_synthetic(stability_checker, embedder)

@@ -59,11 +59,11 @@ retrieval:
 # Module 1: Evidence Independence
 independence:
   enabled: true
-  similarity_threshold: 0.92
+  similarity_threshold: 0.95
   nli_threshold: 0.85
   min_independence_score: 0.5
   clustering_method: "hdbscan"  # hdbscan, agglomerative
-  redundancy_penalty: 0.8
+  redundancy_penalty: 0.5
 
 # Module 2: Retrieval Utility
 utility:
