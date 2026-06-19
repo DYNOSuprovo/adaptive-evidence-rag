@@ -76,5 +76,8 @@ langgraph>=0.0.40
 aiohttp>=3.9.0
 asyncio>=3.4.3
 
+# Open-Domain Search
+wikipedia>=1.4.0
+
 # Optional: Flash Attention (for faster training)
 # flash-attn>=2.3.0  # Requires special install
