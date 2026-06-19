@@ -1,17 +1,20 @@
-# Use an official lightweight Python image
+# Read the doc: https://huggingface.co/docs/hub/spaces-sdks-docker
+
 FROM python:3.11-slim
 
-# Set the working directory to /app
+# Create a non-root user to match Hugging Face Spaces requirements
+RUN useradd -m -u 1000 user
+USER user
+ENV PATH="/home/user/.local/bin:$PATH"
+
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
-COPY . /app
+# Copy requirements and install
+COPY --chown=user ./requirements.txt requirements.txt
+RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy the rest of the application
+COPY --chown=user . /app
 
-# Hugging Face Spaces require the app to run on port 7860
-EXPOSE 7860
-
-# Run FastAPI using uvicorn on port 7860 (without modifying api.py!)
+# Run FastAPI on port 7860
 CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "7860"]
