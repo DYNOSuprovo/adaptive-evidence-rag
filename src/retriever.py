@@ -199,6 +199,44 @@ class EvidenceAwareRetriever:
         """
         top_k = top_k or self.top_k
         
+        # If no static documents are loaded, use Live Wikipedia!
+        if getattr(self, 'document_embeddings', None) is None or len(self.documents) == 0:
+            print(f"[Retriever] Dynamic Wikipedia Search for: {query}")
+            import wikipedia
+            import warnings
+            warnings.filterwarnings("ignore", category=UserWarning, module='wikipedia')
+            wikipedia.set_user_agent("AdaptiveEvidenceRAG/1.0 (test@example.com)")
+            
+            try:
+                search_results = wikipedia.search(query, results=top_k)
+                wiki_docs = []
+                for title in search_results:
+                    try:
+                        # Get a clean summary
+                        summary = wikipedia.summary(title, sentences=6, auto_suggest=False)
+                        if summary and len(summary) > 50:
+                            wiki_docs.append(summary)
+                    except:
+                        continue
+                
+                if wiki_docs:
+                    # Dynamically encode and score them just for this query
+                    wiki_embeddings = self.embedder.encode(wiki_docs, normalize_embeddings=True, convert_to_numpy=True)
+                    query_embedding = self.embedder.encode(query, normalize_embeddings=True, convert_to_numpy=True)
+                    similarities = np.dot(wiki_embeddings, query_embedding)
+                    
+                    # Sort and return
+                    results = []
+                    for idx in np.argsort(similarities)[::-1]:
+                        if similarities[idx] >= filter_score:
+                            results.append((int(idx), float(similarities[idx]), wiki_docs[idx]))
+                    return results[:top_k]
+            except Exception as e:
+                print(f"[Retriever] Wikipedia search failed: {e}")
+                
+            return []
+        
+        # Original static logic
         # Encode query
         query_embedding = self.embedder.encode(
             query, 

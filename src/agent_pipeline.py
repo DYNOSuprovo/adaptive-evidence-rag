@@ -10,6 +10,10 @@ from langchain_ollama import ChatOllama
 # Import existing modules
 from src.retriever import EvidenceAwareRetriever
 
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from peft import PeftModel
+
 # Define State
 class AgentState(TypedDict):
     question: str
@@ -40,6 +44,39 @@ class RAGMultiAgentSystem:
         except Exception as e:
             print(f"Warning: Failed to init ChatOllama: {e}")
             self.ollama_llm = None
+            
+        self.use_local_qwen = True
+        self.qwen_model = None
+        self.qwen_tokenizer = None
+        if self.use_local_qwen:
+            try:
+                print("[AgentSystem] Loading local Qwen fine-tuned model (4-bit)...")
+                model_name = "Qwen/Qwen1.5-0.5B-Chat"
+                quantization_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_compute_dtype=torch.float16,
+                    bnb_4bit_use_double_quant=True
+                )
+                self.qwen_tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+                base_model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    quantization_config=quantization_config,
+                    device_map="auto",
+                    trust_remote_code=True,
+                    torch_dtype=torch.float16
+                )
+                
+                # Check if the LoRA model directory exists before loading
+                lora_path = "models/qwen-evidence-rag-lora-final"
+                if os.path.exists(lora_path):
+                    self.qwen_model = PeftModel.from_pretrained(base_model, lora_path)
+                    print("[AgentSystem] Local Qwen + LoRA loaded successfully.")
+                else:
+                    print(f"[AgentSystem] Warning: LoRA path {lora_path} not found. Using base model.")
+                    self.qwen_model = base_model
+            except Exception as e:
+                print(f"Warning: Failed to load local Qwen model: {e}")
             
         self.workflow = self._build_graph()
         
@@ -204,15 +241,6 @@ class RAGMultiAgentSystem:
         
     def synthesizer_node(self, state: AgentState):
         """Generates final answer using LLM."""
-        llm_to_use = None
-        if self.llm and os.environ.get("OPENAI_API_KEY"):
-            llm_to_use = self.llm
-        elif getattr(self, "ollama_llm", None):
-            llm_to_use = self.ollama_llm
-            
-        if not llm_to_use:
-            return {"final_answer": "System Notice: Neither OpenAI nor local Ollama LLMs are available. The LangGraph pipeline filtered the documents successfully, but the Synthesizer Agent could not run."}
-            
         question = state['question']
         docs = state['filtered_documents']
         
@@ -221,6 +249,49 @@ class RAGMultiAgentSystem:
             
         context = "\n\n".join([f"[Doc {i+1}] {doc}" for i, doc in enumerate(docs)])
         
+        # Priority 1: Use local fine-tuned Qwen model
+        if getattr(self, "use_local_qwen", False) and self.qwen_model and self.qwen_tokenizer:
+            try:
+                system_prompt = "You are an advanced Evidence-Aware AI Assistant. Answer the user's question using ONLY the provided verified evidence. If the evidence does not contain the answer, say 'I don't have enough verified evidence to answer this.'"
+                user_prompt = f"Evidence:\n{context}\n\nQuestion:\n{question}\n\nAnswer:"
+                
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+                text = self.qwen_tokenizer.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True
+                )
+                model_inputs = self.qwen_tokenizer([text], return_tensors="pt").to(self.qwen_model.device)
+                
+                generated_ids = self.qwen_model.generate(
+                    model_inputs.input_ids,
+                    max_new_tokens=512,
+                    temperature=0.2,
+                    do_sample=True
+                )
+                generated_ids = [
+                    output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+                ]
+                
+                response = self.qwen_tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+                return {"final_answer": response}
+            except Exception as e:
+                print(f"Error generating answer with local Qwen: {e}")
+                # Fallback to other LLMs if it fails
+        
+        # Priority 2/3: Fallback to OpenAI or Ollama
+        llm_to_use = None
+        if self.llm and os.environ.get("OPENAI_API_KEY"):
+            llm_to_use = self.llm
+        elif getattr(self, "ollama_llm", None):
+            llm_to_use = self.ollama_llm
+            
+        if not llm_to_use:
+            return {"final_answer": "System Notice: Local Qwen, OpenAI, and local Ollama LLMs are unavailable or failed. The LangGraph pipeline filtered the documents successfully, but the Synthesizer Agent could not run."}
+            
         prompt = f'''You are an advanced Evidence-Aware AI Assistant. 
 Answer the following user question using ONLY the provided verified evidence.
 If the evidence does not contain the answer, say "I don't have enough verified evidence to answer this."

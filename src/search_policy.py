@@ -253,10 +253,13 @@ Search Queries:
         variants.append(question)
         
         # Strategy 2: Remove question words
-        cleaned = question.lower()
-        for word in ['what', 'who', 'when', 'where', 'why', 'how', 'which', 'is', 'are', 'the', 'a', 'an']:
-            cleaned = cleaned.replace(word, '')
-        variants.append(cleaned.strip())
+        stop_words = {'what', 'who', 'when', 'where', 'why', 'how', 'which', 'is', 'are', 'the', 'a', 'an'}
+        words = question.lower().split()
+        cleaned = ' '.join([w for w in words if w not in stop_words])
+        if cleaned:
+            variants.append(cleaned)
+        else:
+            variants.append(question)
         
         # Strategy 3: Extract key terms
         words = [w for w in question.split() if len(w) > 3]

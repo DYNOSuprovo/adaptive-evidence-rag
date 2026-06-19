@@ -35,6 +35,18 @@ We discovered that's not enough. What matters is whether the evidence is truly *
 
 ---
 
+## 4. Experimental Results
+
+Our system drastically reduces hallucination rates while maintaining high retrieval utility across diverse datasets.
+
+### Module Performance (Independence vs Utility vs Stability)
+![Module Performance](logs/figures/module_performance_bar.png)
+
+### Ablation Study: Standard RAG vs Evidence-Aware RAG
+![Ablation Study](logs/figures/ablation_study.png)
+
+---
+
 ## 4. Datasets & Download Links
 
 ### Primary Datasets
@@ -171,42 +183,23 @@ bash scripts/setup_env.sh
 # .\scripts\setup_env.ps1
 ```
 
-### CLI Usage
+### Full-Stack Usage (React + FastAPI)
 
-After installation, the `evidence-rag` command is available system-wide:
+The fastest way to test the hallucination-free generation is by running the built-in React UI and FastAPI backend.
 
+1. **Start the API** (Automatically loads 5,000 documents from FEVER and TriviaQA):
 ```bash
-# Show system info (GPU, config, installed models)
-evidence-rag info
-
-# Run a single question through the pipeline
-evidence-rag query "Who invented the transformer architecture?"
-
-# Query with a custom document corpus
-evidence-rag query "What is CRISPR?" --corpus my_docs.jsonl
-
-# Launch interactive demo (REPL)
-evidence-rag demo
-
-# Run evaluation on benchmark datasets
-evidence-rag evaluate --max-samples 100
-
-# Train the search-policy reward model
-evidence-rag train --epochs 5
-
-# Index a document corpus
-evidence-rag index --input corpus.jsonl
-
-# Use a custom config file
-evidence-rag --config my_config.yaml query "Your question"
+python api.py
 ```
 
-Alternatively, run via Python module:
-
+2. **Start the React Frontend**:
 ```bash
-python -m src --help
-python -m src query "Who invented the transformer architecture?"
+cd frontend
+npm install
+npm run dev
 ```
+
+Navigate to `http://localhost:5173/` and start asking questions!
 
 ### Running the Training Notebook
 
