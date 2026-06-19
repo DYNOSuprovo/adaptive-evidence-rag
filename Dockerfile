@@ -1,6 +1,6 @@
 # Read the doc: https://huggingface.co/docs/hub/spaces-sdks-docker
 
-FROM python:3.9-slim
+FROM python:3.10-slim
 
 # Create a non-root user to match Hugging Face Spaces requirements
 RUN useradd -m -u 1000 user
