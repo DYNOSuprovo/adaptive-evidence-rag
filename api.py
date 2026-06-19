@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from src.utils import load_config, setup_cuda
 from src.retriever import EvidenceAwareRetriever
+from src.agent_pipeline import RAGMultiAgentSystem
 
 app = FastAPI(title="Evidence-Aware RAG API")
 
@@ -38,12 +39,13 @@ class RetrievalResponse(BaseModel):
     utility_score: float
     stability_score: float
     overall_quality: float
+    final_answer: str
     metadata: dict
 
 @app.on_event("startup")
 def load_models():
     """Initialize the RAG pipeline on startup."""
-    global retriever
+    global retriever, agent_system
     
     print("[API] Loading configuration...")
     config = load_config("configs/config.yaml")
@@ -99,31 +101,36 @@ def load_models():
     ]
     print(f"[API] Indexing {len(SAMPLE_CORPUS)} documents...")
     retriever.index_documents(SAMPLE_CORPUS)
+    
+    print("[API] Initializing LangGraph Multi-Agent System...")
+    agent_system = RAGMultiAgentSystem(retriever_pipeline=retriever)
+    
     print("[API] Ready!")
 
 @app.post("/api/query", response_model=RetrievalResponse)
 async def query_pipeline(request: QueryRequest):
     """Run the pipeline for a given query."""
-    if not retriever:
-        return {"error": "Retriever not initialized"}
+    if not agent_system:
+        return {"error": "Agent system not initialized"}
         
-    result = retriever.run_pipeline(request.question)
+    result = agent_system.run(request.question)
     
     return RetrievalResponse(
-        question=result.question,
-        query_used=result.query_used,
-        original_documents=result.original_documents,
-        filtered_documents=result.filtered_documents,
-        independence_score=float(result.independence_score),
-        utility_score=float(result.utility_score),
-        stability_score=float(result.stability_score),
-        overall_quality=float(result.overall_quality),
+        question=result.get('question', request.question),
+        query_used=result.get('query_used', request.question),
+        original_documents=result.get('original_documents', []),
+        filtered_documents=result.get('filtered_documents', []),
+        independence_score=float(result.get('independence_score', 0)),
+        utility_score=float(result.get('utility_score', 0)),
+        stability_score=float(result.get('stability_score', 0)),
+        overall_quality=float(result.get('overall_quality', 0)),
+        final_answer=result.get('final_answer', ''),
         metadata={
-            "num_original": int(result.metadata.get('num_original', 0)),
-            "num_filtered": int(result.metadata.get('num_filtered', 0))
+            "num_original": int(result.get('metadata', {}).get('num_original', 0)),
+            "num_filtered": int(result.get('metadata', {}).get('num_filtered', 0))
         }
     )
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

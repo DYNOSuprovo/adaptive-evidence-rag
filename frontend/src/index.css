@@ -194,6 +194,38 @@ h1 {
 }
 
 /* ──────────────────────────────────────────────────────────
+   Final Answer Section 
+   ────────────────────────────────────────────────────────── */
+.final-answer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.final-answer-section h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.answer-box {
+  background: var(--card-bg);
+  border: 1px solid var(--accent-light);
+  border-left: 4px solid var(--accent-color);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.no-answer {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* ──────────────────────────────────────────────────────────
    Dashboard & Scores 
    ────────────────────────────────────────────────────────── */
 .dashboard {

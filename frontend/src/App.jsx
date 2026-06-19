@@ -96,6 +96,17 @@ function App() {
               <span><strong>Optimized Query:</strong> {result.query_used}</span>
             </div>
 
+            <div className="final-answer-section">
+              <h2>Synthesizer Answer</h2>
+              <div className="answer-box">
+                {result.final_answer ? (
+                  <p>{result.final_answer}</p>
+                ) : (
+                  <p className="no-answer">No answer generated.</p>
+                )}
+              </div>
+            </div>
+
             <div className="dashboard">
               <div className="dashboard-grid">
                 <ScoreCard title="Independence" score={result.independence_score} icon={Activity} />

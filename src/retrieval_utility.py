@@ -41,6 +41,7 @@ class UtilityResult:
     confidence_gain: float      # Change in answer confidence
     contradiction_detected: bool
     contradiction_score: float  # 0 to 1
+    relevance_score: float      # 0 to 1 (sigmoid of logit)
     utility_score: float        # Weighted combination
     information_added: float    # Estimated new information
     is_useful: bool             # Above threshold?
@@ -387,7 +388,8 @@ class UtilityScorer:
         self,
         question: str,
         documents: List[str],
-        measure_confidence: bool = True
+        measure_confidence: bool = True,
+        relevance_logits: List[float] = None
     ) -> List[UtilityResult]:
         """
         Main method: Compute utility score for each document.
@@ -433,11 +435,21 @@ class UtilityScorer:
             contra_detected = contra_score > 0.5
             
             # Weighted utility
-            utility = (
+            base_utility = (
                 self.novelty_weight * novelty +
                 self.confidence_gain_weight * conf_gain +
                 self.contradiction_weight * contra_score
             )
+            
+            # Relevance multiplier via Sigmoid
+            if relevance_logits is not None and i < len(relevance_logits):
+                import math
+                logit = relevance_logits[i]
+                relevance = 1.0 / (1.0 + math.exp(-logit))
+            else:
+                relevance = 1.0
+                
+            utility = base_utility * relevance
             
             # Information added estimate
             info_added = novelty * (1 + conf_gain)
@@ -448,6 +460,7 @@ class UtilityScorer:
                 confidence_gain=conf_gain,
                 contradiction_detected=contra_detected,
                 contradiction_score=contra_score,
+                relevance_score=relevance,
                 utility_score=utility,
                 information_added=info_added,
                 is_useful=utility >= self.min_utility_threshold
@@ -487,10 +500,20 @@ class UtilityScorer:
         indexed_results.sort(key=lambda x: x[1].utility_score, reverse=True)
         
         # Apply filter
+        if threshold is not None:
+            # Dynamic thresholding based on batch distribution
+            utilities = [r.utility_score for _, r in indexed_results]
+            if utilities:
+                mean_u = float(np.mean(utilities))
+                std_u = float(np.std(utilities))
+                dynamic_thresh = max(threshold, mean_u - 0.5 * std_u)
+            else:
+                dynamic_thresh = threshold
+                
+            indexed_results = [(i, r) for i, r in indexed_results if r.utility_score >= dynamic_thresh]
+            
         if top_k:
             indexed_results = indexed_results[:top_k]
-        elif threshold:
-            indexed_results = [(i, r) for i, r in indexed_results if r.utility_score >= threshold]
         
         kept_indices = [i for i, _ in indexed_results]
         kept_indices.sort()  # Maintain original order
