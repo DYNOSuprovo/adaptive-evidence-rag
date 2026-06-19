@@ -35,15 +35,15 @@ spacy>=3.7.0
 # trl>=0.7.0
 # xformers>=0.0.22
 
-# LLM Serving
-vllm>=0.2.0
+# LLM Serving (Unused in API)
+# vllm>=0.2.0
 openai>=1.6.0
 
-# Metrics
-evaluate>=0.4.0
-rouge-score>=0.1.2
-bert-score>=0.3.13
-sacrebleu>=2.3.0
+# Metrics (Commented out for HF Spaces Deployment)
+# evaluate>=0.4.0
+# rouge-score>=0.1.2
+# bert-score>=0.3.13
+# sacrebleu>=2.3.0
 
 # Jupyter (Commented out for HF Spaces Deployment)
 # jupyter>=1.0.0
