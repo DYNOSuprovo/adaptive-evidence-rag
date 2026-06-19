@@ -1,3 +1,13 @@
+---
+title: Adaptive Evidence RAG
+emoji: 🛡️
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 <div align="center">
   <h1>🛡️ Adaptive Evidence-Aware RAG</h1>
   <p><em>Beyond Agreement Counting: Evaluating Evidence Independence, Utility, Search Quality, and Behavioral Stability in Retrieval-Augmented Generation</em></p>
