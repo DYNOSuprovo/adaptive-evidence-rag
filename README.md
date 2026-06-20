@@ -12,6 +12,7 @@ pinned: false
   <h1>🛡️ Adaptive Evidence-Aware RAG</h1>
   <p><em>Beyond Agreement Counting: Evaluating Evidence Independence, Utility, Search Quality, and Behavioral Stability in Retrieval-Augmented Generation</em></p>
 
+  [![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/Dyno1307/adaptive-evidence-rag)
   [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
   [![FastAPI](https://img.shields.io/badge/FastAPI-0.103.1-009688.svg?logo=fastapi)](https://fastapi.tiangolo.com/)
   [![React](https://img.shields.io/badge/React-18.2.0-61DAFB.svg?logo=react)](https://react.dev/)
