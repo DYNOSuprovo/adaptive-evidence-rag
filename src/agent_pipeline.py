@@ -3,7 +3,6 @@ import operator
 from typing import List, Dict, Any, Tuple, TypedDict, Annotated, Sequence
 from dataclasses import dataclass
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
-from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
 
@@ -16,6 +15,7 @@ from peft import PeftModel
 
 # Define State
 class AgentState(TypedDict):
+    intent: str
     question: str
     query_used: str
     original_documents: List[str]
@@ -29,10 +29,6 @@ class AgentState(TypedDict):
     retry_count: int
 
 class RAGMultiAgentSystem:
-    def __init__(self, retriever_pipeline: EvidenceAwareRetriever, llm_model: str = "gpt-3.5-turbo"):
-        self.retriever_pipeline = retriever_pipeline
-        # We will use OpenAI for the Synthesizer LLM
-        # Ensure OPENAI_API_KEY is in environment or handle it gracefully
         try:
             self.llm = ChatOpenAI(model=llm_model, temperature=0.2)
         except Exception as e:
@@ -84,6 +80,8 @@ class RAGMultiAgentSystem:
         workflow = StateGraph(AgentState)
         
         # Define Nodes
+        workflow.add_node("router_agent", self.router_node)
+        workflow.add_node("direct_answer_agent", self.direct_answer_node)
         workflow.add_node("retriever_agent", self.retriever_node)
         workflow.add_node("evidence_critic_agent", self.evidence_critic_node)
         workflow.add_node("utility_judge_agent", self.utility_judge_node)
@@ -91,7 +89,19 @@ class RAGMultiAgentSystem:
         workflow.add_node("synthesizer_agent", self.synthesizer_node)
         
         # Define Edges
-        workflow.set_entry_point("retriever_agent")
+        workflow.set_entry_point("router_agent")
+        
+        workflow.add_conditional_edges(
+            "router_agent",
+            lambda state: "knowledge" if state.get("intent") == "KNOWLEDGE" else "direct",
+            {
+                "knowledge": "retriever_agent",
+                "direct": "direct_answer_agent"
+            }
+        )
+        
+        workflow.add_edge("direct_answer_agent", END)
+        
         workflow.add_edge("retriever_agent", "evidence_critic_agent")
         workflow.add_edge("evidence_critic_agent", "utility_judge_agent")
         
@@ -114,6 +124,88 @@ class RAGMultiAgentSystem:
         if not state.get('filtered_documents') and state.get('retry_count', 0) < 1:
             return "retry"
         return "continue"
+
+    def _generate_with_local_llm(self, system_prompt: str, user_prompt: str) -> str:
+        """Helper to generate text using the local Qwen model."""
+        if not (self.qwen_model and self.qwen_tokenizer):
+            raise ValueError("Local Qwen model is not loaded.")
+            
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        text = self.qwen_tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+        model_inputs = self.qwen_tokenizer([text], return_tensors="pt").to(self.qwen_model.device)
+        
+        generated_ids = self.qwen_model.generate(
+            model_inputs.input_ids,
+            max_new_tokens=512,
+            temperature=0.2,
+            do_sample=True
+        )
+        generated_ids = [
+            output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+        ]
+        
+        return self.qwen_tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+
+    def router_node(self, state: AgentState):
+        """Classifies the query intent to route properly."""
+        question = state['question']
+        
+        prompt = f'''Analyze the user's input and classify its intent into EXACTLY ONE of the following categories:
+1. "MATH": Mathematical calculations, equations, or logic puzzles.
+2. "CONVERSATIONAL": Greetings, chitchat, or direct requests that don't require external facts.
+3. "KNOWLEDGE": Factual questions requiring Wikipedia or external document search.
+
+User Input: {question}
+
+Respond with ONLY the category name (MATH, CONVERSATIONAL, or KNOWLEDGE).'''
+
+        intent = "KNOWLEDGE"
+        try:
+            if self.qwen_model:
+                system_prompt = "You are an intelligent query router. Respond only with the exact category name requested."
+                response_text = self._generate_with_local_llm(system_prompt, prompt)
+            elif self.llm:
+                response_text = self.llm.invoke([HumanMessage(content=prompt)]).content
+            else:
+                response_text = "KNOWLEDGE"
+                
+            intent_raw = response_text.strip().upper()
+            if "MATH" in intent_raw: intent = "MATH"
+            elif "CONVERSATIONAL" in intent_raw: intent = "CONVERSATIONAL"
+            else: intent = "KNOWLEDGE"
+        except Exception as e:
+            print(f"Router error: {e}")
+            intent = "KNOWLEDGE"
+            
+        metadata = state.get("metadata", {})
+        metadata["intent"] = intent
+        return {"intent": intent, "metadata": metadata}
+        
+    def direct_answer_node(self, state: AgentState):
+        """Answers math or conversational queries directly without RAG."""
+        question = state['question']
+        
+        try:
+            if self.qwen_model:
+                system_prompt = "You are a helpful AI assistant. Answer the user's question directly."
+                user_prompt = f"Question: {question}"
+                response_text = self._generate_with_local_llm(system_prompt, user_prompt)
+            elif self.llm:
+                prompt = f"Answer the following directly and accurately:\n\nUser: {question}\n\nAnswer:"
+                response_text = self.llm.invoke([HumanMessage(content=prompt)]).content
+            else:
+                response_text = "System Notice: No local or external LLM available to answer."
+            
+            return {"final_answer": response_text}
+        except Exception as e:
+            return {"final_answer": f"Error generating answer: {str(e)}"}
         
     def retriever_node(self, state: AgentState):
         """Generates variants and retrieves initial candidate documents."""
@@ -250,47 +342,21 @@ class RAGMultiAgentSystem:
         context = "\n\n".join([f"[Doc {i+1}] {doc}" for i, doc in enumerate(docs)])
         
         # Priority 1: Use local fine-tuned Qwen model
-        if getattr(self, "use_local_qwen", False) and self.qwen_model and self.qwen_tokenizer:
+        if getattr(self, "use_local_qwen", False) and getattr(self, "qwen_model", None):
             try:
                 system_prompt = "You are an advanced Evidence-Aware AI Assistant. Answer the user's question using ONLY the provided verified evidence. If the evidence does not contain the answer, say 'I don't have enough verified evidence to answer this.'"
                 user_prompt = f"Evidence:\n{context}\n\nQuestion:\n{question}\n\nAnswer:"
                 
-                messages = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ]
-                text = self.qwen_tokenizer.apply_chat_template(
-                    messages,
-                    tokenize=False,
-                    add_generation_prompt=True
-                )
-                model_inputs = self.qwen_tokenizer([text], return_tensors="pt").to(self.qwen_model.device)
-                
-                generated_ids = self.qwen_model.generate(
-                    model_inputs.input_ids,
-                    max_new_tokens=512,
-                    temperature=0.2,
-                    do_sample=True
-                )
-                generated_ids = [
-                    output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-                ]
-                
-                response = self.qwen_tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+                response = self._generate_with_local_llm(system_prompt, user_prompt)
                 return {"final_answer": response}
             except Exception as e:
                 print(f"Error generating answer with local Qwen: {e}")
                 # Fallback to other LLMs if it fails
-        
-        # Priority 2/3: Fallback to OpenAI or Ollama
-        llm_to_use = None
-        if self.llm and os.environ.get("OPENAI_API_KEY"):
-            llm_to_use = self.llm
-        elif getattr(self, "ollama_llm", None):
-            llm_to_use = self.ollama_llm
+                
+        llm_to_use = getattr(self, "llm", None) or getattr(self, "ollama_llm", None)
             
         if not llm_to_use:
-            return {"final_answer": "System Notice: Local Qwen, OpenAI, and local Ollama LLMs are unavailable or failed. The LangGraph pipeline filtered the documents successfully, but the Synthesizer Agent could not run."}
+            return {"final_answer": "System Notice: Local Qwen and External LLMs are unavailable. The LangGraph pipeline filtered the documents successfully, but the Synthesizer Agent could not run."}
             
         prompt = f'''You are an advanced Evidence-Aware AI Assistant. 
 Answer the following user question using ONLY the provided verified evidence.
@@ -313,6 +379,7 @@ Answer:'''
     def run(self, question: str) -> dict:
         """Run the multi-agent workflow."""
         initial_state = {
+            "intent": "",
             "question": question,
             "query_used": "",
             "original_documents": [],

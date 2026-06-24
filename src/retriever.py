@@ -20,6 +20,8 @@ from src.evidence_independence import IndependenceScorer, IndependenceResult
 from src.retrieval_utility import UtilityScorer, UtilityResult
 from src.search_policy import SearchPolicyLearner, QueryVariant
 from src.behavioral_stability import StabilityChecker, StabilityResult
+from qdrant_client import QdrantClient
+from qdrant_client.http import models as qdrant_models
 
 
 @dataclass
@@ -156,9 +158,27 @@ class EvidenceAwareRetriever:
                 **filtered_config
             )
         
-        # Document store (in-memory for now)
+        # Document store (in-memory fallback)
         self.documents: List[str] = []
         self.document_embeddings: np.ndarray = None
+        
+        # Initialize Qdrant Client (Persistent)
+        self.qdrant_client = QdrantClient(path="data/qdrant_db")
+        self.collection_name = "evidence_docs"
+        
+        # Ensure collection exists
+        try:
+            self.qdrant_client.get_collection(self.collection_name)
+        except Exception:
+            # Create collection if it doesn't exist dynamically based on embedding size
+            sample_emb = self.embedder.encode("test", convert_to_numpy=True)
+            self.qdrant_client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=qdrant_models.VectorParams(
+                    size=sample_emb.shape[0],
+                    distance=qdrant_models.Distance.COSINE
+                )
+            )
     
     def index_documents(self, documents: List[str]):
         """
@@ -179,6 +199,23 @@ class EvidenceAwareRetriever:
         )
         
         print(f"[Retriever] Indexed documents with embedding shape: {self.document_embeddings.shape}")
+        
+        # Index to Qdrant
+        points = []
+        import uuid
+        for i, (doc, emb) in enumerate(zip(documents, self.document_embeddings)):
+            points.append(
+                qdrant_models.PointStruct(
+                    id=str(uuid.uuid4()), # UUID required if not using int
+                    vector=emb.tolist(),
+                    payload={"text": doc}
+                )
+            )
+        self.qdrant_client.upsert(
+            collection_name=self.collection_name,
+            points=points
+        )
+        print(f"[Retriever] Successfully upserted {len(points)} documents into Qdrant Vector DB.")
     
     def retrieve(
         self, 
@@ -199,42 +236,61 @@ class EvidenceAwareRetriever:
         """
         top_k = top_k or self.top_k
         
-        # If no static documents are loaded, use Live Wikipedia!
-        if getattr(self, 'document_embeddings', None) is None or len(self.documents) == 0:
-            print(f"[Retriever] Dynamic Wikipedia Search for: {query}")
-            import wikipedia
-            import warnings
-            warnings.filterwarnings("ignore", category=UserWarning, module='wikipedia')
-            wikipedia.set_user_agent("AdaptiveEvidenceRAG/1.0 (test@example.com)")
-            
-            try:
-                search_results = wikipedia.search(query, results=top_k)
-                wiki_docs = []
-                for title in search_results:
-                    try:
-                        # Get a clean summary
-                        summary = wikipedia.summary(title, sentences=6, auto_suggest=False)
-                        if summary and len(summary) > 50:
-                            wiki_docs.append(summary)
-                    except:
-                        continue
-                
-                if wiki_docs:
-                    # Dynamically encode and score them just for this query
-                    wiki_embeddings = self.embedder.encode(wiki_docs, normalize_embeddings=True, convert_to_numpy=True)
-                    query_embedding = self.embedder.encode(query, normalize_embeddings=True, convert_to_numpy=True)
-                    similarities = np.dot(wiki_embeddings, query_embedding)
-                    
-                    # Sort and return
+        # First check Qdrant!
+        try:
+            collection_info = self.qdrant_client.get_collection(self.collection_name)
+            if collection_info.points_count > 0:
+                query_embedding = self.embedder.encode(query, normalize_embeddings=True, convert_to_numpy=True)
+                search_result = self.qdrant_client.search(
+                    collection_name=self.collection_name,
+                    query_vector=query_embedding.tolist(),
+                    limit=top_k,
+                    score_threshold=filter_score
+                )
+                if search_result:
                     results = []
-                    for idx in np.argsort(similarities)[::-1]:
-                        if similarities[idx] >= filter_score:
-                            results.append((int(idx), float(similarities[idx]), wiki_docs[idx]))
-                    return results[:top_k]
-            except Exception as e:
-                print(f"[Retriever] Wikipedia search failed: {e}")
+                    for i, res in enumerate(search_result):
+                        results.append((i, float(res.score), str(res.payload["text"])))
+                    print(f"[Retriever] Found {len(results)} matches in Qdrant Vector DB.")
+                    return results
+        except Exception as e:
+            pass
+        
+        # If Qdrant is empty or failed, use Live Wikipedia!
+        print(f"[Retriever] Dynamic Wikipedia Search for: {query}")
+        import wikipedia
+        import warnings
+        warnings.filterwarnings("ignore", category=UserWarning, module='wikipedia')
+        wikipedia.set_user_agent("AdaptiveEvidenceRAG/1.0 (test@example.com)")
+        
+        try:
+            search_results = wikipedia.search(query, results=top_k)
+            wiki_docs = []
+            for title in search_results:
+                try:
+                    # Get a clean summary
+                    summary = wikipedia.summary(title, sentences=6, auto_suggest=False)
+                    if summary and len(summary) > 50:
+                        wiki_docs.append(summary)
+                except:
+                    continue
+            
+            if wiki_docs:
+                # Dynamically encode and score them just for this query
+                wiki_embeddings = self.embedder.encode(wiki_docs, normalize_embeddings=True, convert_to_numpy=True)
+                query_embedding = self.embedder.encode(query, normalize_embeddings=True, convert_to_numpy=True)
+                similarities = np.dot(wiki_embeddings, query_embedding)
                 
-            return []
+                # Sort and return
+                results = []
+                for idx in np.argsort(similarities)[::-1]:
+                    if similarities[idx] >= filter_score:
+                        results.append((int(idx), float(similarities[idx]), wiki_docs[idx]))
+                return results[:top_k]
+        except Exception as e:
+            print(f"[Retriever] Wikipedia search failed: {e}")
+            
+        return []
         
         # Original static logic
         # Encode query

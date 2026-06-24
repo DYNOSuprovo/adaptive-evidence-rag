@@ -73,6 +73,8 @@ langchain-core>=0.1.0
 langgraph>=0.0.40
 langchain-openai>=0.0.2
 langchain-ollama>=0.1.0
+langchain-groq>=0.1.0
+langchain-qdrant>=0.1.0
 
 # Async
 aiohttp>=3.9.0
